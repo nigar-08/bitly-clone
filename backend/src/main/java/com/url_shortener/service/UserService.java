@@ -5,6 +5,7 @@ import com.url_shortener.models.User;
 import com.url_shortener.repository.UserRepository;
 import com.url_shortener.security.jwt.JwtAuthenticationResponse;
 import com.url_shortener.security.jwt.JwtUtils;
+import com.url_shortener.exception.DuplicateResourceException;
 import lombok.AllArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,6 +23,12 @@ public class UserService {
     private AuthenticationManager authenticationManager;
     private JwtUtils jwtUtils;
     public User registerUser(User user){
+        if (userRepository.existsByUsername(user.getUsername())) {
+            throw new DuplicateResourceException("Username is already registered");
+        }
+        if (userRepository.existsByEmail(user.getEmail())) {
+            throw new DuplicateResourceException("Email is already registered");
+        }
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         return userRepository.save(user);
     }
