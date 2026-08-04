@@ -6,19 +6,25 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.Column;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Data
+@Table(name = "url_mappings", indexes = {
+        @Index(name = "idx_url_mapping_user_created", columnList = "user_id,createdDate")
+})
 public class UrlMapping {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    @Column(nullable = false, length = 2048)
     private String originalUrl;
+    @Column(nullable = false, unique = true, length = 12)
     private String shortUrl;
     private int clickCount;
     private LocalDateTime createdDate;
@@ -26,8 +32,5 @@ public class UrlMapping {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
-
-    @OneToMany(mappedBy = "urlMapping")
-    private List<ClickEvent> clickEvents;
 
 }

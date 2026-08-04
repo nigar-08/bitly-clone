@@ -4,7 +4,7 @@ package com.url_shortener.controller;
 import com.url_shortener.models.UrlMapping;
 import com.url_shortener.service.UrlMappingService;
 import lombok.AllArgsConstructor;
-import org.springframework.http.HttpHeaders;
+import java.net.URI;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,9 +18,7 @@ public class RedirectController {
     public ResponseEntity<Void> redirect(@PathVariable String shortUrl){
         UrlMapping urlMapping= urlMappingService.getOriginalUrl(shortUrl);
         if(urlMapping!=null){
-            HttpHeaders httpHeaders=new HttpHeaders();
-            httpHeaders.add("Location",urlMapping.getOriginalUrl());
-            return ResponseEntity.status(302).headers(httpHeaders).build();
+            return ResponseEntity.status(302).location(URI.create(urlMapping.getOriginalUrl())).build();
 
         }else{
             return ResponseEntity.notFound().build();

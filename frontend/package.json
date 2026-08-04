@@ -26,7 +26,10 @@
     "react-icons": "^5.4.0",
     "react-loader-spinner": "^6.1.6",
     "react-query": "^3.39.3",
-    "react-router-dom": "^7.1.1"
+    "react-router-dom": "7.18.2"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

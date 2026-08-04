@@ -25,8 +25,12 @@ FROM eclipse-temurin:21-jre
 # Set the working directory
 WORKDIR /app
 
+RUN addgroup --system shortener && adduser --system --ingroup shortener shortener
+
 # Copy the built JAR file from the build stage
 COPY --from=build /app/target/*.jar app.jar
+RUN chown shortener:shortener /app/app.jar
+USER shortener
 
 # Expose port 8080
 EXPOSE 8080

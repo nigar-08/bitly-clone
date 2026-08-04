@@ -8,30 +8,51 @@ import com.url_shortener.models.UrlMapping;
 import com.url_shortener.models.User;
 import com.url_shortener.repository.ClickEventRepository;
 import com.url_shortener.repository.UrlMappingRepository;
-import lombok.AllArgsConstructor;
+import com.url_shortener.exception.InvalidUrlException;
+import com.url_shortener.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 @Service
-@AllArgsConstructor
 public class UrlMappingService {
-    private UrlMappingRepository urlMappingRepository;
-    private ClickEventRepository clickEventRepository;
+    private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final int SHORT_CODE_LENGTH = 8;
+    private static final int MAX_GENERATION_ATTEMPTS = 10;
+
+    private final UrlMappingRepository urlMappingRepository;
+    private final ClickEventRepository clickEventRepository;
+    private final SecureRandom secureRandom;
+    private final Clock clock;
+
+    public UrlMappingService(UrlMappingRepository urlMappingRepository, ClickEventRepository clickEventRepository,
+                             SecureRandom secureRandom, Clock clock) {
+        this.urlMappingRepository = urlMappingRepository;
+        this.clickEventRepository = clickEventRepository;
+        this.secureRandom = secureRandom;
+        this.clock = clock;
+    }
+
+    @Transactional
     public UrlMappingDTO createShortUrl(String originalUrl, User user) {
+        validateOriginalUrl(originalUrl);
         String shortUrl=generateShortUrl();
         UrlMapping urlMapping=new UrlMapping();
         urlMapping.setOriginalUrl(originalUrl);
         urlMapping.setShortUrl(shortUrl);
         urlMapping.setUser(user);
-        urlMapping.setCreatedDate(LocalDateTime.now());
+        urlMapping.setCreatedDate(LocalDateTime.now(clock));
         UrlMapping savedUrlMapping=urlMappingRepository.save(urlMapping);
-        return convertToDto(urlMapping);
+        return convertToDto(savedUrlMapping);
 
     }
     private UrlMappingDTO convertToDto(UrlMapping urlMapping) {
@@ -48,15 +69,17 @@ public class UrlMappingService {
 
 
     private String generateShortUrl() {
-        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-        Random random=new Random();
-        StringBuilder shortUrl=new StringBuilder(8);
-        for (int i = 0; i < 8; i++) {
-            shortUrl.append(characters.charAt(random.nextInt(characters.length())));
-            
+        for (int attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+            StringBuilder shortUrl = new StringBuilder(SHORT_CODE_LENGTH);
+            for (int i = 0; i < SHORT_CODE_LENGTH; i++) {
+                shortUrl.append(CHARACTERS.charAt(secureRandom.nextInt(CHARACTERS.length())));
+            }
+            String candidate = shortUrl.toString();
+            if (!urlMappingRepository.existsByShortUrl(candidate)) {
+                return candidate;
+            }
         }
-        return shortUrl.toString();
+        throw new IllegalStateException("Could not allocate a unique short code");
     }
 
     public List<UrlMappingDTO> getUrlsByUser(User user) {
@@ -64,9 +87,12 @@ public class UrlMappingService {
                 .map(this::convertToDto).toList();
     }
 
-    public List<ClickEventDTO> getClickEventsByDate(String shortUrl, LocalDateTime start, LocalDateTime end) {
-        UrlMapping urlMapping = urlMappingRepository.findByShortUrl(shortUrl);
-        if (urlMapping != null) {
+    public List<ClickEventDTO> getClickEventsByDate(String shortUrl, User user, LocalDateTime start, LocalDateTime end) {
+        if (end.isBefore(start)) {
+            throw new InvalidUrlException("endDate must not be before startDate");
+        }
+        UrlMapping urlMapping = urlMappingRepository.findByShortUrlAndUser(shortUrl, user)
+                .orElseThrow(() -> new ResourceNotFoundException("Short URL not found"));
             return clickEventRepository.findByUrlMappingAndClickDateBetween(urlMapping, start, end).stream()
                     .collect(Collectors.groupingBy(
                             click -> click.getClickDate().toLocalDate(),
@@ -79,13 +105,15 @@ public class UrlMappingService {
                         clickEventDTO.setCount(entry.getValue());
                         return clickEventDTO;
                     })
+                    .sorted((left, right) -> left.getClickDate().compareTo(right.getClickDate()))
                     .collect(Collectors.toList());
-        }
-        return null;
     }
 
 
     public Map<LocalDate, Long> getTotalClicksByUserAndDate(User user, LocalDate start, LocalDate end) {
+        if (end.isBefore(start)) {
+            throw new InvalidUrlException("endDate must not be before startDate");
+        }
         List<UrlMapping> urlMappings=urlMappingRepository.findByUser(user);
         List<ClickEvent> clickEvents=clickEventRepository.findByUrlMappingInAndClickDateBetween(urlMappings ,start.atStartOfDay(),end.plusDays(1).atStartOfDay());
         return clickEvents.stream()
@@ -93,17 +121,29 @@ public class UrlMappingService {
                         Collectors.counting()));
     }
 
+    @Transactional
     public UrlMapping getOriginalUrl(String shortUrl) {
-        UrlMapping urlMapping=urlMappingRepository.findByShortUrl(shortUrl);
+        UrlMapping urlMapping = urlMappingRepository.findByShortUrl(shortUrl).orElse(null);
         if(urlMapping!=null){
-            urlMapping.setClickCount(urlMapping.getClickCount()+1);
-            urlMappingRepository.save(urlMapping);
+            urlMappingRepository.incrementClickCount(urlMapping.getId());
             ClickEvent clickEvent=new ClickEvent();
-            clickEvent.setClickDate(LocalDateTime.now());
+            clickEvent.setClickDate(LocalDateTime.now(clock));
             clickEvent.setUrlMapping(urlMapping);
             clickEventRepository.save(clickEvent);
         }
         return urlMapping;
     }
-}
 
+    private void validateOriginalUrl(String originalUrl) {
+        try {
+            URI uri = new URI(originalUrl);
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null
+                    || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+                throw new InvalidUrlException("originalUrl must be an absolute HTTP or HTTPS URL");
+            }
+        } catch (URISyntaxException exception) {
+            throw new InvalidUrlException("originalUrl is malformed");
+        }
+    }
+}
