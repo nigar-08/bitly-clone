@@ -56,6 +56,8 @@ public class WebSecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/", "/index.html", "/assets/**", "/vite.svg").permitAll()
+                        .requestMatchers("/about", "/register", "/login", "/dashboard", "/error", "/s/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/urls/**").authenticated()
                         .requestMatchers("/{shortUrl}").permitAll()
@@ -67,4 +69,3 @@ public class WebSecurityConfig {
     }
 
 }
-

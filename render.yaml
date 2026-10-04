@@ -1,22 +1,19 @@
 services:
   - type: web
-    name: bitly-clone-backend
+    name: bitly-clone
     env: docker
-    rootDir: backend
+    rootDir: .
+    dockerfilePath: ./Dockerfile
     plan: free
     autoDeploy: true
     envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: DATABASE_USERNAME
-        sync: false
-      - key: DATABASE_PASSWORD
-        sync: false
       - key: DATABASE_DIALECT
-        value: org.hibernate.dialect.MySQLDialect
+        value: org.hibernate.dialect.H2Dialect
+      - key: DATABASE_DRIVER
+        value: org.h2.Driver
       - key: JWT_SECRET
-        sync: false
+        value: f+hnWqKeSnU0fKcdqA5soOjTt0zBhfOQjZFnkEDy7FM=
       - key: JWT_EXPIRATION
         value: "86400000"
       - key: FRONTEND_URL
-        sync: false
+        value: https://bitly-clone-backend-6d3c.onrender.com
