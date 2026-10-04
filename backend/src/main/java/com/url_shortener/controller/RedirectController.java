@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @AllArgsConstructor
 public class RedirectController {
     private UrlMappingService urlMappingService;
-    @GetMapping("/{shortUrl}")
+    @GetMapping("/{shortUrl:[A-Za-z0-9]{8}}")
     public ResponseEntity<Void> redirect(@PathVariable String shortUrl){
         UrlMapping urlMapping= urlMappingService.getOriginalUrl(shortUrl);
         if(urlMapping!=null){
